@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{GAME_NAME}}</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #000; overflow: hidden; }
+    canvas { display: block; }
+    #vr-button {
+      position: absolute;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%);
+      padding: 12px 24px;
+      background: rgba(0, 0, 0, 0.7);
+      color: #fff;
+      border: 1px solid #fff;
+      border-radius: 4px;
+      font: normal 16px sans-serif;
+      cursor: pointer;
+      z-index: 999;
+    }
+    #vr-button:hover { background: rgba(255, 255, 255, 0.2); }
+    #info {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      color: #aaa;
+      font: 14px sans-serif;
+      z-index: 999;
+      pointer-events: none;
+    }
+  </style>
+</head>
+<body>
+  <div id="info">{{GAME_DESCRIPTION}} — WASD to move, mouse to look (desktop)</div>
+  <script type="module" src="/src/main.js"></script>
+</body>
+</html>
