@@ -1,0 +1,19 @@
+{
+  "name": "steampunk-rune-chamber",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "vite --host 0.0.0.0",
+    "build": "vite build",
+    "preview": "vite preview --host 0.0.0.0"
+  },
+  "dependencies": {
+    "three": "^0.170.0"
+  },
+  "devDependencies": {
+    "@gltf-transform/cli": "^4.3.0",
+    "@vitejs/plugin-basic-ssl": "^1.1.0",
+    "vite": "^6.0.0"
+  }
+}
