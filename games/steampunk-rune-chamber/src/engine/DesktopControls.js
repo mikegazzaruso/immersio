@@ -35,7 +35,7 @@ export class DesktopControls {
   }
 
   update(dt) {
-    const speed = 4.0;
+    const speed = 3.0;
     const forward = new THREE.Vector3();
     const right = new THREE.Vector3();
 

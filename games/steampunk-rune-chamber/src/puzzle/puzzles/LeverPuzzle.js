@@ -3,10 +3,11 @@ import { PuzzleBase } from '../PuzzleBase.js';
 import { Interactable } from '../../interaction/Interactable.js';
 
 /**
- * LeverPuzzle — Find the ancient steampunk lever and pull it.
- * Uses 2_multipart_leveler.glb ONLY (no procedural lever).
- * The lever handle is the 15th part (child) of the segmented model.
- * Pulling the lever spawns the crystal on a high platform.
+ * LeverPuzzle — Find the ancient steampunk lever and activate it.
+ * Uses 2_multipart_leveler.glb (static multipart model, no embedded animations).
+ * The entire model is treated as an interactable; on activation, a simple
+ * rotation animation is applied to a detected handle part (or the model root).
+ * Pulling the lever spawns the floating platforms and crystal.
  */
 export class LeverPuzzle extends PuzzleBase {
   constructor(eventBus, engine) {
@@ -32,7 +33,7 @@ export class LeverPuzzle extends PuzzleBase {
     const gltf = await this.engine.assetLoader.loadGLTF('/models/1/2_multipart_leveler.glb');
     this._leverModel = gltf.scene;
 
-    // Position the lever in a corner of the room, slightly hidden
+    // Position the lever in a corner of the room, partially hidden behind columns
     this._leverModel.position.set(-15, 0, -15);
     this._leverModel.scale.setScalar(1.0);
     this._leverModel.rotation.y = Math.PI / 4;
@@ -43,48 +44,50 @@ export class LeverPuzzle extends PuzzleBase {
 
     this.scene.add(this._leverModel);
 
-    // Find part 15 — the physical lever handle in the segmented model.
-    // Blender "layer 15" maps to the 15th node in GLTF traversal order.
-    const allNodes = [];
+    // Find a suitable handle part for animation.
+    // Strategy: look for the highest mesh or the last mesh in traversal (often the handle).
+    const allMeshes = [];
     this._leverModel.traverse((child) => {
-      allNodes.push(child);
+      if (child.isMesh) {
+        allMeshes.push(child);
+      }
     });
 
-    // Log structure for debugging
-    console.log(`Lever model: ${allNodes.length} nodes`);
-    allNodes.forEach((n, i) => console.log(`  [${i}] ${n.type} "${n.name}"`));
+    console.log(`Lever model: ${allMeshes.length} meshes`);
+    allMeshes.forEach((m, i) => console.log(`  [${i}] "${m.name}" pos=(${m.position.x.toFixed(2)}, ${m.position.y.toFixed(2)}, ${m.position.z.toFixed(2)})`));
 
-    // Try by name first (e.g. "Part_15", "part15", "lever", etc.)
-    this._leverHandle = allNodes.find(n =>
-      n.name && /15/.test(n.name)
-    );
-
-    // Fallback: use traversal index 15
-    if (!this._leverHandle && allNodes.length > 15) {
-      this._leverHandle = allNodes[15];
-    }
-
-    // Last resort: pick the last mesh
-    if (!this._leverHandle) {
-      const meshes = allNodes.filter(n => n.isMesh);
-      if (meshes.length > 0) {
-        this._leverHandle = meshes[meshes.length - 1];
+    // Pick handle: prefer highest mesh (likely the lever arm/handle)
+    if (allMeshes.length > 0) {
+      let highestMesh = allMeshes[0];
+      let highestY = -Infinity;
+      for (const m of allMeshes) {
+        const worldPos = new THREE.Vector3();
+        m.getWorldPosition(worldPos);
+        if (worldPos.y > highestY) {
+          highestY = worldPos.y;
+          highestMesh = m;
+        }
       }
+      // Use the parent group of the highest mesh if it's not the model root,
+      // so we rotate the handle sub-assembly, not just one face
+      this._leverHandle = highestMesh.parent && highestMesh.parent !== this._leverModel
+        ? highestMesh.parent
+        : highestMesh;
+      console.log(`Lever handle selected: "${this._leverHandle.name || '(unnamed)'}"`);
     }
 
     if (this._leverHandle) {
-      console.log(`Lever handle found: [${allNodes.indexOf(this._leverHandle)}] "${this._leverHandle.name}"`);
       this._startRotX = this._leverHandle.rotation.x;
-
-      // Make the entire model interactable (easier to click), but animate only part 15
-      this._interactable = new Interactable(this._leverModel, {
-        type: 'activate',
-        onActivate: () => this._onLeverActivated(),
-      });
-      this.interactionSystem.register(this._interactable);
     }
 
-    // Add a glow indicator near the lever
+    // Make the entire model interactable
+    this._interactable = new Interactable(this._leverModel, {
+      type: 'activate',
+      onActivate: () => this._onLeverActivated(),
+    });
+    this.interactionSystem.register(this._interactable);
+
+    // Add a glow indicator near the lever to guide the player
     const indicator = new THREE.PointLight('#00ffaa', 2.0, 6);
     indicator.position.set(-15, 2, -15);
     this.scene.add(indicator);
@@ -113,7 +116,7 @@ export class LeverPuzzle extends PuzzleBase {
     const t = Math.min(this._animTimer / this._animDuration, 1);
     const eased = t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
 
-    // Animate only the lever handle (part 15) rotation
+    // Animate the lever handle rotation
     if (this._leverHandle) {
       this._leverHandle.rotation.x = this._startRotX + eased * this._endRotX;
     }
@@ -130,9 +133,9 @@ export class LeverPuzzle extends PuzzleBase {
       this.scene.remove(this._indicator);
     }
 
-    this.eventBus.emit('notification', { text: 'A crystal materializes above!' });
+    this.eventBus.emit('notification', { text: 'Platforms materialize above!' });
 
-    // Trigger callback for crystal spawn
+    // Trigger callback for platform and crystal spawn
     if (this.onLeverPulled) {
       this.onLeverPulled();
     }

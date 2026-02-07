@@ -13,7 +13,7 @@ export class LocomotionSystem {
     this.engine = engine;
     this.input = inputManager;
     this.eventBus = eventBus;
-    this.speed = 4.0;
+    this.speed = 3.0;
     this.snapAngle = Math.PI / 4;
     this.snapCooldown = 0.3;
     this._snapTimer = 0;

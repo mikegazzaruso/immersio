@@ -22,7 +22,7 @@ export class CrystalCollectPuzzle extends PuzzleBase {
     this._altarGroup = null;
     this._altarTargetPos = new THREE.Vector3(0, 1.2, -15);
     this._snapDistance = 1.5;
-    this._crystalSpawnPos = new THREE.Vector3(0, 13.8, -3);
+    this._crystalSpawnPos = new THREE.Vector3(-6, 9.8, -8);
     this._crystalSpawned = false;
 
     // Callback for when crystal is placed

@@ -68,7 +68,7 @@ export class Engine {
   init() {
     this.vrSetup.init();
 
-    // Check for ?level=N URL param — load specific level directly
+    // Check for ?level=N URL param -- load specific level directly
     const params = new URLSearchParams(window.location.search);
     const levelParam = parseInt(params.get('level'));
     if (!isNaN(levelParam) && levelParam >= 0) {
@@ -104,7 +104,7 @@ export class Engine {
         this._setupLevel1Puzzles();
       }
 
-      // HUD — show level title
+      // HUD -- show level title
       const puzzleCount = this.puzzleManager.order.length;
       this.hud.onLevelLoaded(config.name || `Level ${n}`, puzzleCount);
     } catch (e) {
@@ -153,7 +153,7 @@ export class Engine {
   }
 
   _setupLevel1Puzzles() {
-    // Puzzle 1: Find and pull the lever (root — activates on init)
+    // Puzzle 1: Find and pull the lever (root -- activates on init)
     const leverPuzzle = new LeverPuzzle(this.eventBus, this);
 
     // Puzzle 2: Platform traversal with enemy patrol (activates after lever)
@@ -169,19 +169,20 @@ export class Engine {
     couchCompletePuzzle.dependencies = ['crystal_collect'];
 
     // Wire up callbacks:
+    // When lever is pulled, tell crystal puzzle where the crystal platform is
     leverPuzzle.onLeverPulled = () => {
       const crystalPos = enemyPatrolPuzzle.getCrystalPlatformPosition();
       crystalCollectPuzzle.setCrystalSpawnPosition(crystalPos);
     };
 
-    // When crystal is placed, enemies become harmless
+    // When crystal is placed on altar, enemies become harmless
     crystalCollectPuzzle.onCrystalPlaced = () => {
       if (enemyPatrolPuzzle.state === 'active') {
         enemyPatrolPuzzle.solve();
       }
     };
 
-    // Register all puzzles (dependency graph mode — not linear chain)
+    // Register all puzzles (dependency graph mode -- not linear chain)
     this.puzzleManager.register(leverPuzzle);
     this.puzzleManager.register(enemyPatrolPuzzle);
     this.puzzleManager.register(crystalCollectPuzzle);

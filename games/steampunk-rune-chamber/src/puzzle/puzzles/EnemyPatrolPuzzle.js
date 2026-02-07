@@ -8,11 +8,11 @@ const _enemyPos = new THREE.Vector3();
 /**
  * EnemyPatrolPuzzle — Steampunk mushroom enemies patrol floating platforms.
  * Uses 4_mushroom.glb with skeleton walk animation (translation-independent).
- * If the player touches an enemy, they are reset to spawn.
+ * If the player touches an enemy, they respawn at the nearest safe spot below
+ * (ground level near the platforms), preserving all puzzle progress.
  *
- * This puzzle also creates the floating platforms the player must traverse.
- * It activates after the lever is pulled and is "solved" when the player
- * reaches the crystal platform (checked externally by CrystalCollectPuzzle).
+ * Creates 4 floating platforms in a staircase pattern ascending from left to right.
+ * 2-3 mushroom enemies patrol on the platforms.
  */
 export class EnemyPatrolPuzzle extends PuzzleBase {
   constructor(eventBus, engine) {
@@ -25,25 +25,23 @@ export class EnemyPatrolPuzzle extends PuzzleBase {
     this._mixers = [];
     this._platforms = [];
     this._killRadius = 1.2;
-    this._playerSpawn = new THREE.Vector3(0, 0, 15);
     this._active = false;
+    this._respawnCooldown = 0;
 
-    // Platform definitions: [x, y, z, width, depth]
-    // Creates a path from ground level up to high platform where crystal sits
+    // Safe respawn point: ground level near the base of the platform staircase
+    this._safeSpawn = new THREE.Vector3(8, 0, 8);
+
+    // Platform definitions: 4 platforms in ascending staircase pattern
+    // Arranged from right side going up and slightly forward
     this._platformDefs = [
-      // Starting platforms near ground
-      { pos: [5, 1.5, 5], w: 3, d: 3 },
-      { pos: [8, 3.0, 0], w: 2.5, d: 2.5 },
-      { pos: [5, 4.5, -5], w: 2.5, d: 2.5 },
-      // Mid-height platforms
-      { pos: [0, 6.0, -8], w: 3, d: 3, hasEnemy: true },
-      { pos: [-5, 7.5, -5], w: 2.5, d: 2.5 },
-      { pos: [-8, 9.0, 0], w: 3, d: 3, hasEnemy: true },
-      // High platforms
-      { pos: [-5, 10.5, 5], w: 2.5, d: 2.5 },
-      { pos: [0, 12.0, 3], w: 3, d: 3, hasEnemy: true },
-      // Crystal platform (highest)
-      { pos: [0, 13.5, -3], w: 4, d: 4, isCrystalPlatform: true },
+      // Step 1: Low platform (easy first jump from ground)
+      { pos: [8, 2.0, 5], w: 3.5, d: 3.5, hasEnemy: false },
+      // Step 2: Mid-low platform with first enemy
+      { pos: [4, 4.5, 0], w: 3, d: 3, hasEnemy: true },
+      // Step 3: Mid-high platform with second enemy
+      { pos: [-2, 7.0, -4], w: 3, d: 3, hasEnemy: true },
+      // Step 4: Crystal platform (highest) -- no enemy, reward for making it
+      { pos: [-6, 9.5, -8], w: 4, d: 4, isCrystalPlatform: true, hasEnemy: false },
     ];
   }
 
@@ -51,7 +49,7 @@ export class EnemyPatrolPuzzle extends PuzzleBase {
     this._active = true;
     this._buildPlatforms();
     this._spawnEnemies();
-    this.eventBus.emit('notification', { text: 'Jump across the platforms! Beware the steampunk mushrooms!' });
+    this.eventBus.emit('notification', { text: 'Floating platforms appear! Beware the steampunk mushrooms!' });
   }
 
   _buildPlatforms() {
@@ -60,7 +58,7 @@ export class EnemyPatrolPuzzle extends PuzzleBase {
       const d = def.d;
       const h = 0.3;
 
-      // Platform mesh (steampunk style: brass-colored with dark trim)
+      // Platform mesh (steampunk style: brass-colored with teal emissive trim)
       const group = new THREE.Group();
 
       const top = new THREE.Mesh(
@@ -74,27 +72,33 @@ export class EnemyPatrolPuzzle extends PuzzleBase {
       top.position.y = 0;
       group.add(top);
 
-      // Edge trim (dark border)
-      const trimMat = new THREE.MeshLambertMaterial({ color: 0x3a2a1a });
-      const trimH = 0.08;
+      // Teal emissive trim on edges
+      const trimMat = new THREE.MeshStandardMaterial({
+        color: 0x00ccaa,
+        emissive: 0x00ccaa,
+        emissiveIntensity: 0.4,
+        metalness: 0.5,
+        roughness: 0.2,
+      });
+      const trimH = 0.06;
 
-      const frontTrim = new THREE.Mesh(new THREE.BoxGeometry(w, trimH, 0.05), trimMat);
+      const frontTrim = new THREE.Mesh(new THREE.BoxGeometry(w, trimH, 0.04), trimMat);
       frontTrim.position.set(0, -h / 2 + trimH / 2, d / 2);
       group.add(frontTrim);
 
-      const backTrim = new THREE.Mesh(new THREE.BoxGeometry(w, trimH, 0.05), trimMat);
+      const backTrim = new THREE.Mesh(new THREE.BoxGeometry(w, trimH, 0.04), trimMat);
       backTrim.position.set(0, -h / 2 + trimH / 2, -d / 2);
       group.add(backTrim);
 
-      const leftTrim = new THREE.Mesh(new THREE.BoxGeometry(0.05, trimH, d), trimMat);
+      const leftTrim = new THREE.Mesh(new THREE.BoxGeometry(0.04, trimH, d), trimMat);
       leftTrim.position.set(-w / 2, -h / 2 + trimH / 2, 0);
       group.add(leftTrim);
 
-      const rightTrim = new THREE.Mesh(new THREE.BoxGeometry(0.05, trimH, d), trimMat);
+      const rightTrim = new THREE.Mesh(new THREE.BoxGeometry(0.04, trimH, d), trimMat);
       rightTrim.position.set(w / 2, -h / 2 + trimH / 2, 0);
       group.add(rightTrim);
 
-      // Decorative gears on sides
+      // Decorative gear on side of wider platforms
       if (w >= 3) {
         const gearMat = new THREE.MeshStandardMaterial({
           color: 0xaa8833,
@@ -108,10 +112,16 @@ export class EnemyPatrolPuzzle extends PuzzleBase {
         gear.position.set(w / 2 + 0.01, 0, 0);
         gear.rotation.y = Math.PI / 2;
         group.add(gear);
-
-        // Store for animation
         def.gear = gear;
       }
+
+      // Underside dark plate for depth
+      const underside = new THREE.Mesh(
+        new THREE.BoxGeometry(w * 0.9, 0.15, d * 0.9),
+        new THREE.MeshLambertMaterial({ color: 0x3a2a1a })
+      );
+      underside.position.y = -h / 2 - 0.075;
+      group.add(underside);
 
       group.position.set(def.pos[0], def.pos[1], def.pos[2]);
       this.scene.add(group);
@@ -161,7 +171,7 @@ export class EnemyPatrolPuzzle extends PuzzleBase {
 
       this.scene.add(model);
 
-      // Set up AnimationMixer — strip root position tracks so it plays in-place
+      // Set up AnimationMixer -- strip root position tracks so it plays in-place
       const mixer = new THREE.AnimationMixer(model);
       if (sourceGltf.animations.length > 0) {
         const clip = this._stripRootMotion(sourceGltf.animations[0]);
@@ -179,7 +189,7 @@ export class EnemyPatrolPuzzle extends PuzzleBase {
         baseY: model.position.y,
         center: new THREE.Vector3(def.pos[0], model.position.y, def.pos[2]),
         patrolHalfDist,
-        speed: 0.2 + Math.random() * 0.1,
+        speed: 0.3 + Math.random() * 0.15,
         phase: Math.random() * Math.PI * 2,
         axis: Math.random() > 0.5 ? 'x' : 'z',
       });
@@ -200,9 +210,15 @@ export class EnemyPatrolPuzzle extends PuzzleBase {
   update(dt) {
     if (!this._active) return;
 
+    // Respawn cooldown
+    if (this._respawnCooldown > 0) {
+      this._respawnCooldown -= dt;
+      return;
+    }
+
     const time = performance.now() * 0.001;
     for (const enemy of this._enemies) {
-      // --- Translation patrol ---
+      // Translation patrol
       const offset = Math.sin(time * enemy.speed + enemy.phase) * enemy.patrolHalfDist;
       if (enemy.axis === 'x') {
         enemy.model.position.x = enemy.center.x + offset;
@@ -229,7 +245,6 @@ export class EnemyPatrolPuzzle extends PuzzleBase {
 
       for (const enemy of this._enemies) {
         _enemyPos.copy(enemy.model.position);
-        // Check XZ distance and vertical overlap
         const dx = _playerPos.x - _enemyPos.x;
         const dz = _playerPos.z - _enemyPos.z;
         const horizontalDist = Math.sqrt(dx * dx + dz * dz);
@@ -244,12 +259,15 @@ export class EnemyPatrolPuzzle extends PuzzleBase {
   }
 
   _onPlayerHit() {
-    this.eventBus.emit('notification', { text: 'A steampunk mushroom got you! Resetting...' });
+    this.eventBus.emit('notification', { text: 'A steampunk mushroom got you! Respawning nearby...' });
 
-    // Reset player to spawn
-    this.engine.cameraRig.position.copy(this._playerSpawn);
+    // Respawn at safe spot near the base of the platforms (keep all progress)
+    this.engine.cameraRig.position.copy(this._safeSpawn);
     this.engine.locomotion.velocityY = 0;
     this.engine.locomotion._isGrounded = true;
+
+    // Brief invulnerability to prevent immediate re-death
+    this._respawnCooldown = 1.5;
   }
 
   /**
@@ -260,7 +278,7 @@ export class EnemyPatrolPuzzle extends PuzzleBase {
     if (crystalDef) {
       return new THREE.Vector3(crystalDef.pos[0], crystalDef.pos[1] + 0.3, crystalDef.pos[2]);
     }
-    return new THREE.Vector3(0, 13.8, -3);
+    return new THREE.Vector3(-6, 9.8, -8);
   }
 
   onSolved() {

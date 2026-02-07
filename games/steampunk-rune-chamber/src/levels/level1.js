@@ -58,6 +58,6 @@ export default {
   props: [],
   playerSpawn: {
     position: [0, 0, 15],
-    rotationY: 0,
+    rotationY: Math.PI,
   },
 };
