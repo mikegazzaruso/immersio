@@ -1,7 +1,7 @@
 ---
 name: scene
 description: Create or modify a game level with environment, decorations, and props
-argument-hint: "<N> <description>" or "<N> modify <changes>"
+argument-hint: "[games/<slug>] <N> <description>" or "[games/<slug>] <N> modify <changes>"
 user-invocable: true
 allowed-tools: Read, Bash, Glob, Grep, Write, Edit
 agent: scene-builder
@@ -16,18 +16,30 @@ You are the scene builder for Three.js + WebXR games.
 
 **Complete ALL steps in a SINGLE run. NEVER use AskUserQuestion. NEVER stop early.**
 
+## First Step: Read CLAUDE.md
+
+Read the `CLAUDE.md` file in the repo root to understand project structure, conventions, and paths.
+
 ## Parsing Arguments
 
-Two syntaxes:
+### Game Directory Detection
 
-### CREATE syntax (generates level from scratch, overwrites if exists):
+The first argument may be a game path (starts with `games/`):
+- **With path:** `/scene games/my-game 2 una spiaggia tropicale`
+- **Without path:** `/scene 2 una spiaggia tropicale` → auto-detect by finding the most recently modified `games/*/GAME_DESIGN.md`
+
+After resolving the game directory, all file paths are relative to it.
+
+### Two syntaxes:
+
+#### CREATE syntax (generates level from scratch, overwrites if exists):
 ```
-/scene <N> <environment-description> [decoration1, decoration2, ...]
+/scene [games/<slug>] <N> <environment-description> [decoration1, decoration2, ...]
 ```
 
-### EDIT syntax (modifies existing level — keyword `modify` after number):
+#### EDIT syntax (modifies existing level — keyword `modify` after number):
 ```
-/scene <N> modify <changes-to-make>
+/scene [games/<slug>] <N> modify <changes-to-make>
 ```
 
 ## How to decide mode
@@ -36,13 +48,13 @@ Two syntaxes:
 **Otherwise → CREATE MODE (even if the level already exists — it will be overwritten).**
 
 ### CREATE examples:
-- `/scene 1 una spiaggia [palme, mare, scogli, uccelli]`
+- `/scene games/my-game 1 una spiaggia [palme, mare, scogli, uccelli]`
 - `/scene 2 foresta incantata`
-- `/scene 3 grotta oscura [stalattiti, funghi, cristalli]`
+- `/scene games/crystal-forest 3 grotta oscura [stalattiti, funghi, cristalli]`
 - `/scene 1 a serene mountain lake surrounded by pine trees`
 
 ### EDIT examples:
-- `/scene 2 modify make the sky a sunset`
+- `/scene games/my-game 2 modify make the sky a sunset`
 - `/scene 2 modify add more palm trees`
 - `/scene 1 modify cambia il cielo in un tramonto`
 
@@ -50,7 +62,7 @@ Two syntaxes:
 
 ## Context Awareness
 
-If `GAME_DESIGN.md` exists, read it first to understand the game's art direction and this level's role in the overall design.
+If `GAME_DESIGN.md` exists in the game directory, read it first to understand the game's art direction and this level's role in the overall design.
 
 ## CREATE MODE
 
@@ -58,7 +70,7 @@ If `GAME_DESIGN.md` exists, read it first to understand the game's art direction
 Extract: level number N, environment description, optional `[decorations]`.
 
 ### Step A2: Discover models
-Run `ls public/models/N/` for `.glb` files. If empty/missing, that's fine — level will have no GLB props.
+Run `ls <game-dir>/public/models/N/` for `.glb` files. If empty/missing, that's fine — level will have no GLB props.
 
 ### Step A3: Circle layout for GLB props
 radius = `max(3, numberOfModels * 1.2)`. Indoor: `min(radius, roomWidth/2 - 1)`.
@@ -103,7 +115,7 @@ palme→palmTree, alberi→tree, pini→pineTree, rocce/scogli→rock, mare/ocea
 
 ### Step A6: Write level file
 
-Write to `src/levels/levelN.js`:
+Write to `<game-dir>/src/levels/levelN.js`:
 
 ```js
 export default {
@@ -113,8 +125,11 @@ export default {
   decorations: [ /* from A5 */ ],
   props: [ /* GLB models from A3 */ ],
   playerSpawn: { position: [0, 0, R], rotationY: Math.PI },
+  exit: { position: [0, 0, -R], targetLevel: N+1, label: 'Next Level' }, // omit for last level
 };
 ```
+
+**Exit field:** If this is NOT the last level, add an `exit` to place a portal. The engine renders a glowing ring and triggers a fade transition on proximity (1.8m). Place the portal opposite to playerSpawn. For the final level, omit `exit` entirely. For branching paths, use an array of exits.
 
 ### Step A7: Done
 
@@ -125,7 +140,7 @@ Print: `Level N created! Open https://localhost:5173/?level=N and refresh.`
 ## EDIT MODE (level already exists)
 
 ### Step B1: Read existing level
-Read the full content of `src/levels/levelN.js`.
+Read the full content of `<game-dir>/src/levels/levelN.js`.
 
 ### Step B2: Understand the modification
 Interpret the user's natural language request.

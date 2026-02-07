@@ -1,7 +1,7 @@
 ---
 name: mechanic
 description: Add a game mechanic by implementing a puzzle class with world objects and interaction wiring
-argument-hint: '"description of the mechanic"'
+argument-hint: '[games/<slug>] "description of the mechanic"'
 user-invocable: true
 allowed-tools: Read, Bash, Glob, Grep, Write, Edit
 agent: gameplay-dev
@@ -16,21 +16,33 @@ You implement game mechanics for Three.js + WebXR games.
 
 **Complete ALL steps in a SINGLE run. NEVER use AskUserQuestion. NEVER stop early.**
 
+## First Step: Read CLAUDE.md
+
+Read the `CLAUDE.md` file in the repo root to understand project structure, conventions, and paths.
+
 ## Parsing Arguments
 
 ```
-/mechanic "<description of the mechanic>"
+/mechanic [games/<slug>] "<description of the mechanic>"
 ```
 
-Examples:
-- `/mechanic "collect 4 colored gems and place them on matching pedestals"`
+### Game Directory Detection
+
+The first argument may be a game path (starts with `games/`):
+- **With path:** `/mechanic games/my-game "collect 4 gems and place them on pedestals"`
+- **Without path:** `/mechanic "collect 4 gems"` → auto-detect by finding the most recently modified `games/*/GAME_DESIGN.md`
+
+After resolving the game directory, all file paths are relative to it.
+
+### Examples:
+- `/mechanic games/crystal-forest "collect 4 colored gems and place them on matching pedestals"`
 - `/mechanic "activate 5 rune stones in the correct order"`
-- `/mechanic "pull a lever to raise a bridge"`
+- `/mechanic games/haunted-mansion "pull a lever to raise a bridge"`
 - `/mechanic "find 3 keys hidden in the scene to unlock the exit door"`
 
 ## Context
 
-Always read `GAME_DESIGN.md` if it exists for:
+Always read `GAME_DESIGN.md` inside the game directory for:
 - Overall game concept and mechanics list
 - Art direction (colors, materials)
 - Level layout (which level this mechanic belongs to)
@@ -47,22 +59,27 @@ Parse the description. Determine:
 - **Dependencies**: which level, which systems (collision, interaction)
 
 ### Step 2: Create Puzzle Class
-Write to `src/puzzle/puzzles/YourPuzzleName.js`:
+Write to `<game-dir>/src/puzzle/puzzles/YourPuzzleName.js`:
 - Extend `PuzzleBase`
 - Implement `onActivate()`, `onSolved()`, `update(dt)`, `init()`
 - Use `ObjectFactory` for procedural objects
 - Register interactables with `InteractionSystem`
 
 ### Step 3: Wire in Engine
-Edit `src/engine/Engine.js` to:
+Edit `<game-dir>/src/engine/Engine.js` to:
 - Import the new puzzle class
 - Instantiate it with required dependencies
+- If non-linear flow needed: set `puzzle.dependencies = ['dep_id1', 'dep_id2']`
 - Register with `puzzleManager.register(puzzle)`
 - Ensure `puzzleManager.init()` is called after registration
 
+**Puzzle dependencies:** PuzzleManager supports two modes:
+- **Linear (default):** no `dependencies` set → sequential chain
+- **Graph:** any puzzle has `dependencies` → activates only when ALL deps are solved. Root puzzles (empty deps) activate on init.
+
 ### Step 4: Create World Objects (if needed)
 If the mechanic needs dedicated world geometry (a puzzle room, a special area):
-- Create in `src/world/YourArea.js` or inline in the puzzle class
+- Create in `<game-dir>/src/world/YourArea.js` or inline in the puzzle class
 - Add collision boxes if objects should block the player
 
 ### Step 5: Test Considerations
@@ -74,7 +91,7 @@ If the mechanic needs dedicated world geometry (a puzzle room, a special area):
 Print:
 ```
 Mechanic "name" implemented!
-- Puzzle class: src/puzzle/puzzles/YourPuzzle.js
+- Puzzle class: <game-dir>/src/puzzle/puzzles/YourPuzzle.js
 - Pattern: collect-and-place (or sequence, trigger, custom)
 - Registered in Engine.js with PuzzleManager
 ```
