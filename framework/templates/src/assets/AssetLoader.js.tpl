@@ -40,13 +40,41 @@ export class AssetLoader {
     return model;
   }
 
+  async loadGLTF(path) {
+    const cacheKey = `gltf:${path}`;
+    let cached = this._cache.get(cacheKey);
+
+    if (!cached) {
+      const gltf = await new Promise((resolve, reject) => {
+        this._gltfLoader.load(path, resolve, undefined, reject);
+      });
+      cached = { scene: gltf.scene, animations: gltf.animations || [] };
+      this._cache.set(cacheKey, cached);
+    }
+
+    const scene = cached.scene.clone();
+    const animations = cached.animations;
+    return { scene, animations };
+  }
+
+  static stripRootMotion(clip) {
+    const rootNames = ['Root', 'root', 'Armature', 'Hip', 'Hips'];
+    const filtered = clip.tracks.filter(track => {
+      if (!track.name.endsWith('.position')) return true;
+      const boneName = track.name.split('.')[0];
+      return !rootNames.includes(boneName);
+    });
+    return new THREE.AnimationClip(clip.name, clip.duration, filtered);
+  }
+
   async preload(paths) {
     await Promise.all(paths.map(p => this.load(p)));
   }
 
   dispose() {
     for (const [, obj] of this._cache) {
-      obj.traverse((child) => {
+      const root = obj.scene || obj; // loadGLTF stores { scene, animations }, load stores scene directly
+      root.traverse((child) => {
         if (child.geometry) child.geometry.dispose();
         if (child.material) {
           if (Array.isArray(child.material)) {

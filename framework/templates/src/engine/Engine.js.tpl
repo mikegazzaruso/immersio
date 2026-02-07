@@ -127,11 +127,11 @@ export class Engine {
     if (session) {
       this.inputManager.update(session);
       this.locomotion.update(dt);
-      this.interactionSystem.update();
     } else {
       this.desktopControls.update(dt);
     }
 
+    this.interactionSystem.update();
     this.collisionSystem.update(this.cameraRig);
     this.locomotion.postUpdate(this.collisionSystem);
     this.puzzleManager.update(dt);

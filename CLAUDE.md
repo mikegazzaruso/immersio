@@ -69,8 +69,8 @@ Engine
 ├── DesktopControls      # Mouse look + WASD movement
 ├── InputManager         # Abstracts VR/desktop → InputActions events
 ├── LocomotionSystem     # Teleport (left stick) + snap-turn (right stick)
-├── InteractionSystem    # Ray-based hover, grab (grip), activate (trigger)
-├── CollisionSystem      # AABB box colliders + ground plane
+├── InteractionSystem    # Ray-based hover, grab, activate (VR + desktop)
+├── CollisionSystem      # AABB box colliders + ground plane + anti-tunneling
 ├── AssetLoader          # GLTFLoader wrapper for .glb files
 ├── ObjectFactory        # Procedural mesh primitives
 ├── DecorationRegistry   # Extensible registry for decoration spawners
@@ -131,6 +131,35 @@ new Interactable(mesh, {
   onHoverExit: () => {},
   enabled: true,
 });
+```
+
+## Desktop Interaction
+
+The `InteractionSystem` supports full desktop interaction alongside VR:
+
+- **Click** = activate (trigger equivalent) — fires on hovered interactable
+- **E key** = grab/release toggle — grabs hovered interactable, releases on second press
+- Hover detection uses camera-center raycast with recursive object traversal (works with GLB child meshes)
+- Grabbed objects follow 1.5m in front of camera in world space
+- The `hand` parameter is `'desktop'` for all desktop interaction callbacks
+
+## AssetLoader API
+
+### `load(path, opts)` — Standard GLB loading
+Returns cloned `scene` only (no animations). Use for static props.
+
+### `loadGLTF(path)` — Full GLB loading with animations
+Returns `{ scene, animations }`. Use when you need `AnimationMixer`.
+
+### `AssetLoader.stripRootMotion(clip)` — Static helper
+Filters `.position` tracks from root bones (Root, root, Armature, Hip, Hips) to prevent animated models from drifting. Returns a new `AnimationClip`.
+
+```js
+const { scene, animations } = await engine.assetLoader.loadGLTF('/models/1/creature.glb');
+const mixer = new THREE.AnimationMixer(scene);
+for (const clip of animations) {
+  mixer.clipAction(AssetLoader.stripRootMotion(clip)).play();
+}
 ```
 
 ## Puzzle Lifecycle

@@ -9,6 +9,7 @@ export class CollisionSystem {
     this.playerHeight = 1.8;
     this.groundY = 0;
     this._onSurface = false;
+    this._lastY = null;
   }
 
   get isOnSurface() {
@@ -31,6 +32,7 @@ export class CollisionSystem {
 
   clear() {
     this.colliders.length = 0;
+    this._lastY = null;
   }
 
   setGroundPlane(y) {
@@ -47,19 +49,18 @@ export class CollisionSystem {
 
   update(cameraRig) {
     const pos = cameraRig.position;
+    const prevY = this._lastY ?? pos.y;
     this._onSurface = false;
 
-    _playerBox.min.set(
-      pos.x - this.playerHalfWidth,
-      pos.y,
-      pos.z - this.playerHalfWidth
-    );
-    _playerBox.max.set(
-      pos.x + this.playerHalfWidth,
-      pos.y + this.playerHeight,
-      pos.z + this.playerHalfWidth
-    );
+    // Skin width: extend player box 0.06m below feet so standing-on-surface
+    // always produces real overlap (fixes float-precision loss of contact)
+    const skin = 0.06;
+    const hw = this.playerHalfWidth;
 
+    _playerBox.min.set(pos.x - hw, pos.y - skin, pos.z - hw);
+    _playerBox.max.set(pos.x + hw, pos.y + this.playerHeight, pos.z + hw);
+
+    // Pass 1: standard AABB resolution
     for (const collider of this.colliders) {
       if (!_playerBox.intersectsBox(collider)) continue;
 
@@ -95,8 +96,24 @@ export class CollisionSystem {
         }
       }
 
-      _playerBox.min.set(pos.x - this.playerHalfWidth, pos.y, pos.z - this.playerHalfWidth);
-      _playerBox.max.set(pos.x + this.playerHalfWidth, pos.y + this.playerHeight, pos.z + this.playerHalfWidth);
+      _playerBox.min.set(pos.x - hw, pos.y - skin, pos.z - hw);
+      _playerBox.max.set(pos.x + hw, pos.y + this.playerHeight, pos.z + hw);
+    }
+
+    // Pass 2: anti-tunneling sweep — catch high-speed falls through thin platforms
+    // If player was above a collider last frame and is now below it, snap back to top
+    if (!this._onSurface && pos.y < prevY) {
+      for (const collider of this.colliders) {
+        // Check XZ overlap
+        if (pos.x + hw < collider.min.x || pos.x - hw > collider.max.x) continue;
+        if (pos.z + hw < collider.min.z || pos.z - hw > collider.max.z) continue;
+        // Was above last frame, now below — tunneled through
+        if (prevY >= collider.max.y - 0.01 && pos.y < collider.max.y) {
+          pos.y = collider.max.y;
+          this._onSurface = true;
+          break;
+        }
+      }
     }
 
     // Ground clamp
@@ -104,5 +121,7 @@ export class CollisionSystem {
       pos.y = this.groundY;
       this._onSurface = true;
     }
+
+    this._lastY = pos.y;
   }
 }

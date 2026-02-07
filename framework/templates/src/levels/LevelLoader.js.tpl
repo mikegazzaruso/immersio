@@ -415,8 +415,10 @@ export class LevelLoader {
     if (!spawn) return;
     const rig = this._engine.cameraRig;
     rig.position.set(...spawn.position);
+    // Apply rotation to camera (not rig) so desktop mouse-look starts facing
+    // the correct direction. In VR the headset overrides camera orientation.
     if (spawn.rotationY != null) {
-      rig.rotation.set(0, spawn.rotationY, 0);
+      this._engine.camera.rotation.set(0, spawn.rotationY, 0);
     }
   }
 

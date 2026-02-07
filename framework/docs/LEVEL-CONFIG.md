@@ -140,6 +140,15 @@ playerSpawn: {
 }
 ```
 
+**`rotationY` semantics:** This is the direction the player faces on spawn, applied to the camera (not the rig). In VR the headset overrides camera orientation.
+
+| Value | Direction |
+|-------|-----------|
+| `0` | Face toward -Z (default Three.js forward) |
+| `Math.PI / 2` | Face toward -X (left) |
+| `Math.PI` | Face toward +Z (toward origin if spawned at positive Z) |
+| `-Math.PI / 2` | Face toward +X (right) |
+
 ## Decorations
 
 See [DECORATION-TYPES.md](DECORATION-TYPES.md) for the full list of procedural decoration types and their parameters.

@@ -70,7 +70,16 @@ export class CollectPlacePuzzle extends PuzzleBase {
   _checkPlacement(entry, releasePos) {
     if (entry.placed) return;
 
-    const dist = releasePos.distanceTo(entry.target);
+    // Use player proximity to target as a fallback — desktop grab release
+    // coordinates can be unreliable depending on camera angle
+    const playerPos = this.scene.parent?.children?.find(c => c.isGroup)?.position;
+    let dist = releasePos.distanceTo(entry.target);
+    if (playerPos) {
+      const playerDist = new THREE.Vector3(playerPos.x, 0, playerPos.z)
+        .distanceTo(new THREE.Vector3(entry.target.x, 0, entry.target.z));
+      dist = Math.min(dist, playerDist);
+    }
+
     if (dist < this.snapDistance) {
       entry.mesh.position.copy(entry.target);
       entry.placed = true;
@@ -94,9 +103,15 @@ export class CollectPlacePuzzle extends PuzzleBase {
 
 ### Key Points
 - Use `Interactable` with `type: 'grab'` for collectibles
-- Check distance on `onRelease` callback
+- Check distance on `onRelease` callback — also check player proximity to target as a fallback for desktop mode
 - Snap position when close enough
 - Unregister interactable after placement to prevent re-grabbing
+
+### Desktop Interaction
+- **Click** = activate (trigger equivalent)
+- **E key** = grab/release toggle
+- The `InteractionSystem` handles hover, grab follow (1.5m in front of camera), and release automatically
+- The `hand` parameter will be `'desktop'` for desktop interactions
 
 ---
 
@@ -382,3 +397,25 @@ this.puzzleManager.init();
 | Parallel | `[]`, `[]`, `[A, B]` | A and B independent, C requires both |
 | Branching | `[A]`, `[A]`, `[B, C]` | A → B and C in parallel → D |
 | Gate | `[A, B, C]` | Single final puzzle requires all others |
+
+---
+
+## Animated GLB Models
+
+Use `AssetLoader.loadGLTF()` instead of `AssetLoader.load()` when you need access to animations.
+
+```js
+const { scene: model, animations } = await engine.assetLoader.loadGLTF('/models/1/creature.glb');
+
+const mixer = new THREE.AnimationMixer(model);
+for (const clip of animations) {
+  // Strip root motion to prevent model drifting off-screen
+  const safeClip = AssetLoader.stripRootMotion(clip);
+  mixer.clipAction(safeClip).play();
+}
+
+// Update mixer in puzzle's update(dt):
+mixer.update(dt);
+```
+
+`stripRootMotion()` filters `.position` tracks from common root bones (Root, root, Armature, Hip, Hips) — the character animates in place instead of walking away from its spawn point.
