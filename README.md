@@ -1,126 +1,141 @@
-# IAmers VR Showcase
+# Immersio
 
-A Three.js + WebXR VR game built entirely with AI-assisted development via Claude Code. Explore three stunning environments, solve puzzles, and interact with the iconic 3D IAMERS sign -- all running in your browser or VR headset.
+A framework for generating Three.js + WebXR VR games from natural language descriptions, powered by Claude Code.
 
-## Demo Game
+Describe a game concept in any language, and Immersio scaffolds a complete, runnable VR project with environments, puzzles, audio, UI, and level transitions — all procedurally generated, no 3D assets required.
 
-The repository includes a fully playable 3-level VR showcase demo designed for the IAmers AI community.
-
-### How to Run
+## Quick Start
 
 ```bash
-# Install dependencies
-npm install
+# In Claude Code, run:
+/dream a VR escape room in a haunted mansion with 3 puzzles
+```
 
-# Start dev server (HTTPS required for WebXR)
+This generates a full game in `games/haunted-mansion/` with:
+- Scaffolded project (Vite + Three.js)
+- Level configs with environments and decorations
+- Puzzle mechanics wired into the engine
+- Procedural audio and HUD
+- Level transitions via portals
+
+```bash
+# Run the generated game
+cd games/haunted-mansion
 npm run dev
 ```
 
 Open **https://localhost:5173** in your browser.
 
-- **Desktop mode**: WASD to move, mouse to look (click to lock pointer), left-click to interact
-- **VR mode**: Click "ENTER VR" with a compatible headset. Left stick to move, right stick to snap-turn, trigger to activate, grip to grab
-- **Skip to a specific level**: Add `?level=2` or `?level=3` to the URL
+- **Desktop**: WASD to move, mouse to look, left-click to interact
+- **VR**: Left stick move, right stick snap-turn, trigger to activate, grip to grab
+- **Specific level**: `?level=2` URL parameter
 
-### The 3 Levels
-
-**Level 1 -- The Floating Island**
-A lush tropical island with palm trees, rocks, water, birds, and floating lanterns under a warm sunset sky.
-- **Puzzle**: Find 3 glowing AI Data Crystals scattered around the island and click them (or grab & place them in VR) onto the colored pedestals at the center.
-
-**Level 2 -- The AI Laboratory**
-A futuristic neon-lit room with glowing cyan trim, crystal formations, columns, and floating particles.
-- **Puzzle**: Activate 5 neural network nodes in the correct sequence. Wrong order flashes red and resets. Correct nodes light up green.
-
-**Level 3 -- The Crystal Cavern**
-A mystical underground cave with stalactites, glowing mushrooms, crystal clusters, vines, and amber lanterns.
-- **Puzzle**: Find the lever near the wall and pull it to raise a crystal bridge segment by segment. Walk across to the final platform.
-
-### The IAMERS Sign
-
-Every level features a floating 3D "IAMERS" text with a subtle rainbow shimmer. Click it (or point and trigger in VR) to trigger a spectacular effect:
-- Letters explode outward with spin
-- Rainbow color wave sweeps across the letters
-- 40 colorful particles burst from the center
-- A musical ascending chord plays (C4 - E4 - G4 - A4 - B4 - D5)
-- Letters gracefully drift back and reassemble
-- Can be activated as many times as you want
-
-Levels auto-advance after completing each puzzle.
-
-## Framework Architecture
-
-This project is also a reusable framework for creating VR games with Claude Code. Use the `/dream` command to generate a complete game from a natural language description.
-
-### Commands
+## Commands
 
 | Command | Description |
 |---|---|
-| `/dream <concept>` | Create a complete game from a description |
-| `/scene N <description>` | Create level N with the given environment |
-| `/scene N modify <changes>` | Edit an existing level |
-| `/mechanic "<description>"` | Add a game mechanic |
-| `/build` | Verify the project builds correctly |
+| `/dream <concept>` | Generate a complete game from a description |
+| `/scene [games/<slug>] N <description>` | Create or overwrite level N |
+| `/scene [games/<slug>] N modify <changes>` | Edit an existing level |
+| `/mechanic [games/<slug>] "<description>"` | Add a game mechanic / puzzle |
+| `/build [games/<slug>]` | Verify the project compiles |
+| `/test [games/<slug>]` | Semantic validation (configs, wiring, transitions) |
 
-### Project Structure
+All commands accept a game path or auto-detect the most recent game.
+
+## Project Structure
 
 ```
-src/
-  main.js                    # Entry point
-  engine/
-    Engine.js                # Core orchestrator (renderer, scene, camera, game loop)
-    VRSetup.js               # WebXR session, controllers, hand tracking
-    DesktopControls.js       # WASD + mouse look + pointer lock
-  events/
-    EventBus.js              # Pub/sub for inter-system communication
-  input/
-    InputActions.js          # Action constants
-    InputManager.js          # XR gamepad polling, edge events
-  locomotion/
-    LocomotionSystem.js      # VR smooth move, snap turn, jump
-  interaction/
-    Interactable.js          # Interactable component
-    InteractionSystem.js     # Raycast hover, grip grab, trigger activate
-  collision/
-    CollisionSystem.js       # AABB collision with push-out
-  assets/
-    AssetLoader.js           # GLB/GLTF loader with Draco + caching
-    ObjectFactory.js         # Procedural mesh factories
-  objects/
-    IAmersSign.js            # 3D extruded text with explosion effect
-  levels/
-    LevelLoader.js           # Config-driven scene builder
-    level1.js, level2.js...  # Level configs
-  puzzle/
-    PuzzleBase.js            # Base class with dispose lifecycle
-    PuzzleManager.js         # Sequential puzzle progression
-    puzzles/                 # Game-specific puzzle implementations
+immersio/
+├── .claude/                 # Agent definitions, skills, commands
+│   ├── agents/              # architect (opus), gameplay-dev, scene-builder (sonnet)
+│   ├── skills/              # dream, scene, mechanic, build, test
+│   └── commands/            # Thin wrappers for slash commands
+├── CLAUDE.md                # Global context for all agents
+├── framework/
+│   ├── templates/           # .tpl files scaffolded by /dream
+│   │   ├── project/         # package.json, vite.config.js, index.html
+│   │   └── src/             # Engine, systems, puzzle framework
+│   └── docs/                # Reference docs for agents
+│       ├── LEVEL-CONFIG.md
+│       ├── DECORATION-TYPES.md
+│       └── MECHANIC-PATTERNS.md
+└── games/                   # Generated games (one directory per game)
+    └── <game-slug>/
+        ├── src/             # Game source code
+        ├── public/models/   # GLB assets per level (optional)
+        ├── GAME_DESIGN.md   # Auto-generated design document
+        └── DEVELOPMENT_PLAN.md
 ```
 
-### Key Patterns
+## Engine Architecture
 
-- **Camera Rig**: `THREE.Group` contains camera. Locomotion moves rig, VR tracking moves camera inside rig
-- **No Physics Engine**: Manual AABB collision with push-out + ground clamp
-- **Performance**: `MeshLambertMaterial` for world, `MeshStandardMaterial` for special objects. No shadows. `FogExp2` for edge hiding
-- **Clean Level Transitions**: All puzzles, interactables, and timers are properly disposed between levels
-- **Procedural Audio**: All sound effects generated via Web Audio API oscillators -- no audio files needed
-- **Input**: VR: left stick smooth move, right stick snap turn. Desktop: WASD + pointer lock mouse
-
-### Documentation
-
-- [Level Config Format](docs/LEVEL-CONFIG.md)
-- [Mechanic Patterns](docs/MECHANIC-PATTERNS.md)
-- [Decoration Types](docs/DECORATION-TYPES.md)
-
-## Build
-
-```bash
-npm run build      # Production build to dist/
-npm run preview    # Preview production build
 ```
+Engine
+├── VRSetup              # WebXR session, controllers
+├── DesktopControls      # Mouse look + WASD
+├── InputManager         # Abstracts VR/desktop input
+├── LocomotionSystem     # Smooth move + snap-turn
+├── InteractionSystem    # Ray-based hover, grab, activate
+├── CollisionSystem      # AABB colliders + ground plane
+├── DecorationRegistry   # Extensible registry for procedural decorations
+├── LevelLoader          # Config-driven scene builder (sky, enclosure, lights, fog)
+├── LevelTransition      # Portal meshes + fade overlay for level switching
+├── AudioManager         # Procedural Web Audio API (ambient + SFX)
+├── HUD                  # Notifications, puzzle progress, level title (desktop + VR)
+├── PuzzleManager        # Linear chain or dependency graph
+├── AssetLoader          # GLB loader with caching
+├── ObjectFactory        # Procedural mesh primitives
+└── EventBus             # Pub/sub for all game events
+```
+
+## Key Features
+
+### Environments
+- **Outdoor**: sky shader gradient, ground plane, directional + hemisphere lighting, fog, particles
+- **Indoor**: enclosure (walls/ceiling/floor), point/spot lights, neon trim strips
+- **13 procedural decorations**: palmTree, tree, pineTree, rock, water, bird, stalactite, mushroom, crystal, coral, vine, lantern, column
+- Custom decoration types via `DecorationRegistry`
+
+### Puzzles
+Three canonical patterns, extensible via `PuzzleBase`:
+1. **Collect-and-Place** — grab objects, carry to targets, snap on proximity
+2. **Activate-in-Order** — tap objects in correct sequence (Simon Says)
+3. **Trigger-Animation** — lever/button triggers environmental change
+
+PuzzleManager supports **linear chains** (default) and **dependency graphs** for non-linear puzzle flow.
+
+### Audio
+Fully procedural via Web Audio API — no audio files needed:
+- Ambient: wind, ocean, cave (with drips)
+- SFX: puzzle activation, solve arpeggio, game complete fanfare, portal whoosh
+
+### Level Transitions
+Portal system with glowing ring mesh, proximity trigger, and fade-to-black transition between levels.
+
+## How It Works
+
+Immersio uses a multi-agent architecture in Claude Code:
+
+1. **Architect** (opus) — analyzes the concept, generates design docs, scaffolds from templates, orchestrates sub-skills
+2. **Scene Builder** (sonnet) — creates level configs with environments, decorations, and prop placement
+3. **Gameplay Dev** (sonnet) — implements puzzle mechanics, wires interactions into the engine
+
+The `/dream` command runs the full pipeline: analyze → scaffold → create scenes → implement mechanics → build → validate.
+
+## Documentation
+
+- [Level Config Format](framework/docs/LEVEL-CONFIG.md)
+- [Mechanic Patterns](framework/docs/MECHANIC-PATTERNS.md)
+- [Decoration Types](framework/docs/DECORATION-TYPES.md)
 
 ## Requirements
 
+- [Claude Code](https://claude.ai/claude-code) CLI
 - Node.js 18+
 - Modern browser with WebXR support (Quest 3, Quest Pro, etc.) for VR
 - Any modern browser for desktop mode
+
+## License
+
+GPL-3.0
