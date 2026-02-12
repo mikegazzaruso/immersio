@@ -64,7 +64,7 @@ Only use for: palmTree, tree, pineTree, rock, mushroom, crystal, coral, lantern,
 
 ## Rules
 - Colors: hex strings like "#ff4444"
-- Y=0 is ground. Objects sit ON ground unless flying/floating
+- Y=0 is the GROUND SURFACE. Every part must sit ON or ABOVE Y=0. For a BoxGeometry(w,h,d) on the ground, set position Y = h/2. For CylinderGeometry(rT,rB,h,seg), position Y = h/2. For SphereGeometry(r), position Y = r. NEVER center objects at Y=0 — that puts half underground!
 - Realistic scale in meters: chair ~0.5x0.8, car ~2x1.5x4, tower ~3x8, pyramid ~4x3
 - PREFER composite for anything beyond a basic shape — be creative, use 4-12 parts
 - Max 12 parts per composite for VR performance
@@ -88,7 +88,17 @@ INDOOR EXAMPLE (chamber):
 Geometries: BoxGeometry(w,h,d), SphereGeometry(r,wSeg,hSeg), CylinderGeometry(rTop,rBot,h,seg), ConeGeometry(r,h,seg), TorusGeometry(r,tube,rSeg,tSeg), OctahedronGeometry(r), IcosahedronGeometry(r), PlaneGeometry(w,h)
 Material: color(REQUIRED), emissive, emissiveIntensity, metalness, roughness, opacity+transparent, side:"double"
 
-Rules: Use outdoor(sky+ground) or indoor(enclosure). 3-5 decoration types. Radians not Math.PI. Rich themed colors.`;
+## CRITICAL RULES
+
+- OUTDOOR environments MUST ALWAYS include BOTH "sky" AND "ground". NEVER omit the ground — the player needs a surface to walk on!
+  - ground.color must match the theme: "#c2b280" for sand/beach, "#557744" for grass/forest, "#888888" for stone/mountain, "#f5f5f0" for snow
+  - ground.radius: 40-80 depending on scene size
+- INDOOR environments MUST ALWAYS use "enclosure" with floorColor set — the floor is the walking surface
+- EVERY environment (indoor or outdoor) MUST include a walking surface. No exceptions.
+- Include 3-5 decoration types with generous counts for atmosphere
+- Rotation values as plain radians (1.5708 not Math.PI/2). NEVER use Math.PI
+- Use rich, themed colors throughout — lights, fog, ground, decorations should all match the mood
+- Use water decoration type for oceans/rivers/ponds: {"type":"water","count":1,"radius":[0,1],"position":[x,y,z],"scale":N}`;
 
 // ---- ENGINE CUSTOMIZATION MODE ----
 
@@ -188,7 +198,7 @@ export function update(engine, dt) {
 
 - ALWAYS import THREE in behaviors.js
 - Return COMPLETE file content — keep ALL existing behaviors when adding new ones
-- Y=0 is ground. Objects sit ON the ground unless flying/floating
+- Y=0 is the GROUND SURFACE. Every part must sit ON or ABOVE Y=0. For a BoxGeometry(w,h,d) on the ground, set position Y = h/2. For CylinderGeometry(rT,rB,h,seg), position Y = h/2. For SphereGeometry(r), position Y = r. NEVER center objects at Y=0 — that puts half underground!
 - Realistic scale in meters: chair ~0.5x0.8, car ~2x1.5x4, tower ~3x8
 - PREFER composite for anything beyond a basic shape — be creative, use 4-12 parts
 - Every composite part MUST have a descriptive "name" (e.g. "body", "lid", "wheel"), NOT generic "box1"
@@ -342,5 +352,9 @@ export function buildObjectUserMessage(prompt, worldPosition) {
  * Build the user message for environment generation.
  */
 export function buildEnvironmentUserMessage(prompt) {
-  return `Generate a complete, immersive, visually rich environment for a VR game level. The theme is: "${prompt}". Build every decoration from scratch using raw Three.js geometries (BoxGeometry, ConeGeometry, CylinderGeometry, SphereGeometry, OctahedronGeometry, etc.). Include full lighting setup, fog, particles, and at least 4 different decoration types with generous counts. Make it atmospheric and stunning.`;
+  return `Generate a complete, immersive, visually rich environment for a VR game level. The theme is: "${prompt}".
+
+MANDATORY: The environment MUST include a walking surface — "ground" for outdoor or "enclosure" with floorColor for indoor. The player needs a floor to stand on. Match the ground color to the theme (sand for beach, grass for forest, stone for cave, etc.).
+
+Build every decoration from scratch using raw Three.js geometries (BoxGeometry, ConeGeometry, CylinderGeometry, SphereGeometry, OctahedronGeometry, etc.). Include full lighting setup, fog, and at least 4 different decoration types with generous counts. Make it atmospheric and stunning.`;
 }

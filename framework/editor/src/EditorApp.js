@@ -1130,6 +1130,12 @@ export class EditorApp {
       }
 
       if (mesh) {
+        // Auto-ground: ensure object bottom sits on Y=0, not below ground
+        const box = new THREE.Box3().setFromObject(mesh);
+        if (box.min.y < -0.01) {
+          mesh.position.y -= box.min.y;
+        }
+
         const baseName = obj.label || obj.name || 'object';
         const numberedName = this._nextNumberedName(baseName);
         mesh.userData.editorLabel = numberedName;
@@ -1423,17 +1429,7 @@ Return the MODIFIED version of this object in the "objects" array with the same 
     const gameTitle = this.gameSlug.replace(/-/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
     const windowName = `${this._gameWindowName}-${windowSuffix}`;
 
-    // If already running, focus/reload the game tab
-    if (this._gameServerRunning) {
-      const url = levelOverride != null
-        ? `https://localhost:5173?level=${levelOverride}`
-        : 'https://localhost:5173';
-      window.open(url, windowName);
-      this.layout.updateStatus({ lastAction: levelOverride != null ? `Level ${levelOverride} opened` : 'Game opened' });
-      return;
-    }
-
-    // Auto-save level before launching so the game loads latest editor state
+    // Always auto-save level before launching so the game loads latest editor state
     await this._handleSave();
 
     // Show spinner overlay
@@ -1441,6 +1437,8 @@ Return the MODIFIED version of this object in the "objects" array with the same 
     this.layout.updateStatus({ lastAction: `Starting ${gameTitle}...` });
 
     try {
+      // Always go through the server endpoint — it kills stale servers,
+      // ensures correct port, and starts fresh with up-to-date files
       const res = await fetch('/__editor_run_game', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -1457,12 +1455,14 @@ Return the MODIFIED version of this object in the "objects" array with the same 
       this.layout.toolbar.setRunning(true);
       hideSpinner();
 
-      // Open in a named tab
+      // Cache-bust URL to force fresh page load in the browser
+      const ts = Date.now();
+      const baseUrl = result.url;
       const gameUrl = levelOverride != null
-        ? `${result.url}?level=${levelOverride}`
-        : result.url;
+        ? `${baseUrl}?level=${levelOverride}&t=${ts}`
+        : `${baseUrl}?t=${ts}`;
       window.open(gameUrl, windowName);
-      this.layout.updateStatus({ lastAction: `Game running — ${gameUrl}` });
+      this.layout.updateStatus({ lastAction: `Game running — ${baseUrl}` });
     } catch (err) {
       hideSpinner();
       console.error('Run game error:', err);
