@@ -116,6 +116,7 @@ export class VRSetup {
     btn.id = 'vr-button';
     btn.textContent = text;
     btn.disabled = !enabled;
+    btn.style.cssText = 'position:absolute;bottom:20px;left:50%;transform:translateX(-50%);padding:12px 24px;background:rgba(0,0,0,0.7);color:#fff;border:1px solid #fff;border-radius:4px;font:normal 16px sans-serif;cursor:pointer;z-index:999;';
     document.body.appendChild(btn);
 
     if (!enabled) return;

@@ -47,12 +47,13 @@ export class CollisionSystem {
     return box;
   }
 
-  update(cameraRig) {
+  update(cameraRig, velocityY = 0) {
     const pos = cameraRig.position;
     const prevY = this._lastY ?? pos.y;
     this._onSurface = false;
 
-    const skin = 0.06;
+    // Disable skin when jumping upward so player can leave platforms
+    const skin = velocityY > 0 ? 0 : 0.06;
     const hw = this.playerHalfWidth;
 
     _playerBox.min.set(pos.x - hw, pos.y - skin, pos.z - hw);

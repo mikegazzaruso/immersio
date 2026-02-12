@@ -100,15 +100,7 @@ export class LocomotionSystem {
     if (tx === 0) return;
 
     const angle = tx > 0 ? -this.snapAngle : this.snapAngle;
-    const rig = this.engine.cameraRig;
-    const camera = this.engine.camera;
-
-    camera.getWorldPosition(_camWorldPos);
-
-    rig.position.sub(_camWorldPos);
-    rig.position.applyAxisAngle(THREE.Object3D.DEFAULT_UP, angle);
-    rig.position.add(_camWorldPos);
-    rig.rotateY(angle);
+    this.engine.cameraRig.rotateY(angle);
 
     this._snapTimer = this.snapCooldown;
   }

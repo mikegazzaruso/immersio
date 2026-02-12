@@ -286,4 +286,56 @@ export class EnemyPatrolPuzzle extends PuzzleBase {
     this._active = false;
     this.eventBus.emit('notification', { text: 'The mushrooms seem calmer now...' });
   }
+
+  /**
+   * Return all enemy model objects for raycast targeting.
+   */
+  getEnemyModels() {
+    return this._enemies.map(e => e.model);
+  }
+
+  /**
+   * Walk parent chain from a raycast hit object to find the matching enemy.
+   */
+  findEnemyByObject(obj) {
+    let current = obj;
+    while (current) {
+      for (const enemy of this._enemies) {
+        if (current === enemy.model) return enemy;
+      }
+      current = current.parent;
+    }
+    return null;
+  }
+
+  /**
+   * Remove an enemy from the scene and internal arrays.
+   */
+  destroyEnemy(enemy) {
+    // Stop animations first
+    const mixerIdx = this._mixers.indexOf(enemy.mixer);
+    if (mixerIdx !== -1) {
+      enemy.mixer.stopAllAction();
+      this._mixers.splice(mixerIdx, 1);
+    }
+
+    // Dispose geometry and materials to avoid GC pressure
+    enemy.model.traverse((child) => {
+      if (child.isMesh) {
+        if (child.geometry) child.geometry.dispose();
+        if (child.material) {
+          if (Array.isArray(child.material)) {
+            child.material.forEach(m => m.dispose());
+          } else {
+            child.material.dispose();
+          }
+        }
+      }
+    });
+
+    this.scene.remove(enemy.model);
+
+    const enemyIdx = this._enemies.indexOf(enemy);
+    if (enemyIdx !== -1) this._enemies.splice(enemyIdx, 1);
+  }
 }

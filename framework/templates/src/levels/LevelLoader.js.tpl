@@ -362,49 +362,193 @@ export class LevelLoader {
     };
 
     for (const dec of decorations) {
+      // AI-generated geometry format: has `parts` array or `geometry` string
+      const isAIFormat = dec.parts || (dec.geometry && typeof dec.geometry === 'string');
+      if (isAIFormat) {
+        this._buildAIDecoration(scene, dec);
+        continue;
+      }
+      // Legacy registry-based type
       if (registry && registry.has(dec.type)) {
         const spawner = registry.get(dec.type);
         spawner(scene, dec, env, ctx);
       } else {
-        console.warn(`Unknown decoration type: ${dec.type}`);
+        console.warn(`Unknown decoration type: ${dec.type || dec.name}`);
       }
     }
   }
 
+  /** Build decoration from AI-generated geometry config (parts or single geometry) */
+  _buildAIDecoration(scene, dec) {
+    const count = dec.count || 1;
+    // Use explicit position when available (editor-saved individual instances),
+    // otherwise scatter randomly within radius range.
+    const hasExplicitPos = dec.position && dec.position.length >= 3 && !dec.radius;
+
+    const radiusRange = dec.radius || [3, 15];
+    const rMin = Array.isArray(radiusRange) ? radiusRange[0] : 0;
+    const rMax = Array.isArray(radiusRange) ? radiusRange[1] : radiusRange;
+
+    for (let i = 0; i < count; i++) {
+      let x, y, z;
+      if (hasExplicitPos) {
+        x = dec.position[0];
+        y = dec.position[1];
+        z = dec.position[2];
+      } else {
+        const angle = Math.random() * Math.PI * 2;
+        const dist = rMin + Math.random() * (rMax - rMin);
+        x = Math.cos(angle) * dist;
+        y = dec.position?.[1] || 0;
+        z = Math.sin(angle) * dist;
+      }
+
+      let mesh;
+      if (dec.parts) {
+        // Multi-part composite
+        const group = new THREE.Group();
+        for (const part of dec.parts) {
+          const child = this._createGeometryMesh(part);
+          if (child) group.add(child);
+        }
+        mesh = group;
+      } else {
+        // Single geometry
+        mesh = this._createGeometryMesh(dec);
+      }
+
+      if (!mesh) continue;
+
+      mesh.position.set(x, y, z);
+
+      // Random scale variation
+      if (dec.scaleRange) {
+        const [sMin, sMax] = dec.scaleRange;
+        const s = sMin + Math.random() * (sMax - sMin);
+        mesh.scale.setScalar(s);
+      }
+
+      // Tag decoration for custom behaviors script
+      mesh.userData.decorationType = dec.name || dec.type || 'decoration';
+      mesh.userData.baseY = y;
+
+      scene.add(mesh);
+      this._levelObjects.push(mesh);
+
+      // Add collision box so the player can't walk through decorations
+      _box.setFromObject(mesh);
+      _v.set(0, 0, 0);
+      _box.getSize(_v);
+      if (_v.x > 0.15 && _v.z > 0.15) {
+        this._engine.collisionSystem.addCollider(_box.clone());
+      }
+    }
+  }
+
+  /** Create a Three.js mesh from a geometry config object */
+  _createGeometryMesh(config) {
+    const GeometryClass = THREE[config.geometry];
+    if (!GeometryClass) {
+      console.warn(`Unknown geometry: ${config.geometry}`);
+      return null;
+    }
+
+    const geo = new GeometryClass(...(config.args || []));
+    const m = config.material || {};
+    const matOpts = { color: m.color || '#888888' };
+    if (m.emissive) {
+      matOpts.emissive = new THREE.Color(m.emissive);
+      matOpts.emissiveIntensity = m.emissiveIntensity || 0.3;
+    }
+    if (m.opacity !== undefined) { matOpts.opacity = m.opacity; matOpts.transparent = true; }
+    if (m.transparent) matOpts.transparent = true;
+    // Use MeshStandardMaterial when metalness/roughness specified, else MeshLambertMaterial
+    const useStandard = m.metalness !== undefined || m.roughness !== undefined;
+    if (useStandard) {
+      matOpts.metalness = m.metalness ?? 0;
+      matOpts.roughness = m.roughness ?? 0.5;
+    }
+    const mat = useStandard
+      ? new THREE.MeshStandardMaterial(matOpts)
+      : new THREE.MeshLambertMaterial(matOpts);
+    const mesh = new THREE.Mesh(geo, mat);
+
+    if (config.position) mesh.position.set(...config.position);
+    if (config.rotation) mesh.rotation.set(...config.rotation);
+    if (config.scale) {
+      if (Array.isArray(config.scale)) mesh.scale.set(...config.scale);
+      else mesh.scale.setScalar(config.scale);
+    }
+
+    return mesh;
+  }
+
   async _loadProps(levelConfig) {
+    if (!levelConfig.props || levelConfig.props.length === 0) return;
+
     const scene = this._engine.scene;
     const loader = this._engine.assetLoader;
     const levelId = levelConfig.id;
 
     const promises = levelConfig.props.map(async (prop) => {
       try {
-        const path = `/models/${levelId}/${prop.model}`;
-        const model = await loader.load(path, {
-          scale: prop.scale,
-          rotationY: prop.rotationY,
-        });
+        let mesh;
 
-        // Auto-ground: compute bounding box and offset Y so bottom sits on floor
-        _box.setFromObject(model);
-        const groundY = prop.position[1] || 0;
-        model.position.set(
-          prop.position[0],
-          groundY - _box.min.y,
-          prop.position[2]
-        );
+        if (prop.model) {
+          // GLB model prop
+          const path = `/models/${levelId}/${prop.model}`;
+          mesh = await loader.load(path, {
+            scale: prop.scale,
+            rotationY: prop.rotationY,
+          });
+          // Auto-ground: offset Y so bottom sits on floor
+          _box.setFromObject(mesh);
+          const groundY = prop.position?.[1] || 0;
+          mesh.position.set(
+            prop.position?.[0] || 0,
+            groundY - _box.min.y,
+            prop.position?.[2] || 0
+          );
+          mesh.userData.propModel = prop.model;
+        } else if (prop.parts) {
+          // AI-generated composite (multi-part)
+          const group = new THREE.Group();
+          for (const part of prop.parts) {
+            const child = this._createGeometryMesh(part);
+            if (child) group.add(child);
+          }
+          mesh = group;
+          const pos = prop.position || [0, 0, 0];
+          mesh.position.set(pos[0], pos[1], pos[2]);
+          if (prop.rotationY) mesh.rotation.y = prop.rotationY;
+        } else if (prop.geometry && typeof prop.geometry === 'string') {
+          // AI-generated single mesh
+          mesh = this._createGeometryMesh(prop);
+          if (mesh && prop.position) {
+            mesh.position.set(prop.position[0], prop.position[1], prop.position[2]);
+          }
+          if (mesh && prop.rotationY) mesh.rotation.y = prop.rotationY;
+        }
 
-        scene.add(model);
-        this._levelObjects.push(model);
+        if (!mesh) return;
+
+        // Set name so behaviors.js can find props via scene.getObjectByName()
+        if (prop.label || prop.name) {
+          mesh.name = prop.label || prop.name;
+        }
+
+        scene.add(mesh);
+        this._levelObjects.push(mesh);
 
         // Add collision box for each prop
-        _box.setFromObject(model);
+        _box.setFromObject(mesh);
         _v.set(0, 0, 0);
         _box.getSize(_v);
         if (_v.x > 0.2 && _v.z > 0.2) {
           this._engine.collisionSystem.addCollider(_box.clone());
         }
       } catch (e) {
-        console.warn(`Failed to load prop ${prop.model} for level ${levelId}:`, e);
+        console.warn(`Failed to load prop:`, prop.model || prop.label || prop.name, e);
       }
     });
 

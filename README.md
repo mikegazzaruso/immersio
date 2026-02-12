@@ -6,20 +6,33 @@ Describe a game concept in any language, and Immersio scaffolds a complete, runn
 
 ## Quick Start
 
+### Generate a game with AI agents
+
 ```bash
 # In Claude Code, run:
 /dream a VR escape room in a haunted mansion with 3 puzzles
 ```
 
-This generates a full game in `games/haunted-mansion/` with:
-- Scaffolded project (Vite + Three.js)
-- Level configs with environments and decorations
-- Puzzle mechanics wired into the engine
-- Procedural audio and HUD
-- Level transitions via portals
+This generates a full game in `games/haunted-mansion/` with scaffolded project, level configs, puzzle mechanics, procedural audio, and level transitions.
+
+### Edit levels visually
 
 ```bash
-# Run the generated game
+# Launch the AI-powered level editor
+node framework/editor/cli.js haunted-mansion 1
+```
+
+The editor opens in your browser with a 4-viewport 3D scene editor. Use natural language to:
+- Generate environments ("dark cave with glowing crystals and fog")
+- Create objects ("treasure chest with gold coins")
+- Add game logic ("when player reaches the door, transition to level 2")
+- Design title screens ("epic cinematic intro with floating particles")
+
+Supports **OpenAI** (GPT-4o, GPT-5.2) and **Ollama** (local models).
+
+### Run the game
+
+```bash
 cd games/haunted-mansion
 npm run dev
 ```
@@ -53,6 +66,9 @@ immersio/
 │   └── commands/            # Thin wrappers for slash commands
 ├── CLAUDE.md                # Global context for all agents
 ├── framework/
+│   ├── editor/              # AI-powered visual level editor
+│   │   ├── cli.js           # Entry point: node cli.js <game-slug> [level]
+│   │   └── src/             # Editor source (UI, AI, viewports, serialization)
 │   ├── templates/           # .tpl files scaffolded by /dream
 │   │   ├── project/         # package.json, vite.config.js, index.html
 │   │   └── src/             # Engine, systems, puzzle framework
@@ -91,6 +107,17 @@ Engine
 
 ## Key Features
 
+### Visual Level Editor
+- **4-viewport 3D editor** with perspective + orthographic views
+- **AI-powered creation**: describe environments, objects, and game logic in natural language
+- **Title screen generator**: cinematic intro screens with configurable text, glow, and atmosphere
+- **Engine customization**: AI writes `behaviors.js` for custom game logic (level transitions, animations, interactions)
+- **GLB import**: drag & drop 3D models into the scene
+- **Transform gizmo**: translate, rotate, scale with keyboard shortcuts (W/E/R)
+- **Undo/Redo**: full action history with Ctrl+Z/Ctrl+Shift+Z
+- **Run Game / Run Level**: launch full game or test current level directly from the editor
+- **Supports OpenAI and Ollama** for AI generation
+
 ### Environments
 - **Outdoor**: sky shader gradient, ground plane, directional + hemisphere lighting, fog, particles
 - **Indoor**: enclosure (walls/ceiling/floor), point/spot lights, neon trim strips
@@ -110,8 +137,11 @@ Fully procedural via Web Audio API — no audio files needed:
 - Ambient: wind, ocean, cave (with drips)
 - SFX: puzzle activation, solve arpeggio, game complete fanfare, portal whoosh
 
+### Title Screen
+Optional cinematic title screen (`titleScreen.js`) with 3D text, atmospheric environment, and "press to start" prompt. Supports configurable font sizes, glow effects, and mesh scales. Automatically shown before level 1 when present.
+
 ### Level Transitions
-Portal system with glowing ring mesh, proximity trigger, and fade-to-black transition between levels.
+Portal system with glowing ring mesh, proximity trigger, and fade-to-black transition between levels. Programmatic transitions via `engine.levelTransition.triggerTransition(targetLevel)` for custom completion conditions.
 
 ## How It Works
 

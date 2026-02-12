@@ -8,6 +8,19 @@ immersio/
 ├── CLAUDE.md                # This file — global context for all agents
 ├── README.md
 ├── framework/               # Generative infrastructure (DO NOT put game code here)
+│   ├── editor/              # AI-powered visual level editor
+│   │   ├── cli.js           # Entry point: node cli.js <game-slug> [level]
+│   │   ├── src/
+│   │   │   ├── EditorApp.js        # Main editor application
+│   │   │   ├── ai/                 # AI integration (OpenAI/Ollama)
+│   │   │   │   ├── AIPromptInterpreter.js
+│   │   │   │   ├── OpenAIClient.js
+│   │   │   │   ├── prompts.js      # System prompts for env, engine, title screen
+│   │   │   │   └── ObjectPreviewFactory.js
+│   │   │   ├── serializer/         # Level config save/load (ES module format)
+│   │   │   ├── ui/                 # Toolbar, panels, dialogs, CSS
+│   │   │   └── viewport/           # 3D viewports, selection, gizmos
+│   │   └── vite.config.js
 │   ├── templates/           # .tpl files scaffolded by /dream
 │   │   ├── project/         # package.json.tpl, vite.config.js.tpl, index.html.tpl
 │   │   └── src/             # Engine, systems, puzzle framework templates
@@ -191,6 +204,96 @@ puzzleC.dependencies = ['collect_place', 'sequence'];
 3. **Trigger-Animation** — lever/button triggers environmental animation (bridge, door)
 
 See `framework/docs/MECHANIC-PATTERNS.md` for full code examples.
+
+## Visual Level Editor
+
+AI-powered visual editor for creating and editing game levels. Supports OpenAI (GPT-4o, GPT-5.2) and Ollama (local models).
+
+### Launch
+
+```bash
+npm run editor -- <game-slug> [level-number]
+# or directly:
+node framework/editor/cli.js <game-slug> [level-number]
+```
+
+### Editor Features
+
+- **AI Environment** — describe an environment in natural language → AI generates sky/enclosure, lights, fog, decorations
+- **AI Objects** — double-click viewport → describe an object → AI creates composite geometry + behaviors
+- **Engine Customization** — describe game logic → AI writes `custom/behaviors.js` with init/update hooks
+- **Title Screen** — describe a cinematic title screen → AI generates environment + styled text, saved as `titleScreen.js`
+- **GLB Import** — drag & drop `.glb` files into the editor
+- **Transform Gizmo** — translate (W), rotate (E), scale (R) selected objects
+- **Undo/Redo** — Ctrl+Z / Ctrl+Shift+Z
+- **Run Game** — launches the full game (title screen → level 1 → level 2...)
+- **Run Level** — launches only the current level being edited
+- **Init Level** — resets the current level to blank state
+
+### Editor Architecture
+
+```
+EditorApp
+├── ViewportManager          # 4-viewport layout (perspective + 3 ortho)
+│   ├── Viewport             # Individual 3D view with camera controls
+│   ├── Selection            # Raycast-based object selection
+│   └── TransformGizmo       # Three.js TransformControls wrapper
+├── EditorLayout             # UI panels, toolbar, dialogs
+│   ├── Toolbar              # File, edit, view, run buttons
+│   ├── SceneTreePanel       # Hierarchical object list
+│   ├── PropertiesPanel      # Selected object properties
+│   ├── EngineCustomPanel    # AI engine customization dialog
+│   ├── SettingsPanel        # API key, model selection
+│   └── StatusBar            # Object count, cursor coords
+├── AIPromptInterpreter      # Routes prompts to OpenAI with system prompts
+│   ├── interpret()          # Environment + object creation
+│   ├── interpretEngine()    # behaviors.js generation
+│   └── interpretTitleScreen() # Title screen generation
+├── LevelConfigSerializer    # Save/load level configs as ES modules
+├── UndoRedoManager          # Action stack for undo/redo
+└── OpenAIClient             # OpenAI/Ollama API wrapper
+```
+
+### Editor ↔ Game Server Communication
+
+The editor's Vite dev server exposes endpoints:
+- `/__editor_save` — write file to disk (POST JSON: `{ path, content }`)
+- `/__editor_load` — read file from disk (GET: `?path=...`)
+- `/__editor_upload` — binary file upload (POST binary: `?path=...`)
+- `/__editor_run_game` — start game's Vite dev server (POST JSON: `{ gameSlug }`)
+- `/__editor_reset_engine` — reset behaviors.js to stub (POST: `?gameSlug=...`)
+- `/__editor_asset` — serve static assets (GET: `?path=...`)
+
+## Title Screen
+
+Games can have an optional title screen (`src/levels/titleScreen.js`) that displays before level 1.
+
+```js
+export default {
+  id: 0,
+  name: 'Title Screen',
+  environment: { /* same format as level environment */ },
+  decorations: [ /* same format as level decorations */ ],
+  title: {
+    text: 'Game Name',
+    subtitle: 'A VR Adventure',
+    color: '#ffffff',
+    emissiveColor: '#4488ff',
+    position: [0, 3, -5],
+    fontSize: 72,           // canvas font size (px)
+    scale: [4, 1, 1],       // mesh scale [x, y, z]
+    subtitleFontSize: 36,
+    subtitleScale: [3, 0.5, 1],
+    startPromptFontSize: 28,
+    startPromptScale: [3, 0.4, 1],
+  },
+  startPrompt: 'Click or press trigger to start',
+};
+```
+
+**Flow:** Engine.init() → try import titleScreen.js → show title + wait for input → fade to level 1. If no titleScreen.js exists, loads level 1 directly. The `?level=N` URL parameter skips the title screen.
+
+**Programmatic transitions:** `engine.levelTransition.triggerTransition(targetLevel)` can be called from `behaviors.js` to trigger level transitions programmatically (e.g., after a timer, reaching a position, defeating enemies).
 
 ## Level Transitions
 

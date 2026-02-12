@@ -35,6 +35,15 @@ export class LevelTransition {
     }
   }
 
+  /**
+   * Programmatically trigger a level transition (used by behaviors.js).
+   * @param {number} targetLevel — the level to load
+   */
+  triggerTransition(targetLevel) {
+    if (this._fading) return; // already transitioning
+    this._startTransition(targetLevel);
+  }
+
   clear() {
     const scene = this._engine.scene;
     for (const portal of this._portals) {

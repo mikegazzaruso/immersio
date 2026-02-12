@@ -14,6 +14,7 @@ export class DesktopControls {
     document.addEventListener('keyup', (e) => { this._keys[e.code] = false; });
 
     this.engine.renderer.domElement.addEventListener('mousedown', () => {
+      if (this.engine._titleBlockPointerLock) return;
       this.engine.renderer.domElement.requestPointerLock();
     });
 

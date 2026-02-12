@@ -18,6 +18,7 @@ import { LeverPuzzle } from '../puzzle/puzzles/LeverPuzzle.js';
 import { EnemyPatrolPuzzle } from '../puzzle/puzzles/EnemyPatrolPuzzle.js';
 import { CrystalCollectPuzzle } from '../puzzle/puzzles/CrystalCollectPuzzle.js';
 import { CouchCompletePuzzle } from '../puzzle/puzzles/CouchCompletePuzzle.js';
+import { SteampunkGun } from '../weapons/SteampunkGun.js';
 
 export class Engine {
   constructor() {
@@ -58,6 +59,9 @@ export class Engine {
     // Level system
     this._currentLevel = 1;
     this._levelLoader = null;
+
+    // Cinematic camera state
+    this._cinematic = null;
 
     // Clock
     this._clock = new THREE.Clock();
@@ -131,6 +135,18 @@ export class Engine {
 
   _loop(time, frame) {
     const dt = Math.min(this._clock.getDelta(), 0.05);
+
+    // Cinematic mode: skip player controls/collision, keep game systems running
+    if (this._cinematic) {
+      this._updateCinematic(dt);
+      this.puzzleManager.update(dt);
+      this.hud.update(dt);
+      if (this._levelLoader) this._levelLoader.update(dt);
+      if (this._steampunkGun) this._steampunkGun.update(dt);
+      this.renderer.render(this.scene, this.camera);
+      return;
+    }
+
     const session = this.renderer.xr.getSession();
 
     if (session) {
@@ -141,13 +157,14 @@ export class Engine {
     }
     this.interactionSystem.update();
 
-    this.collisionSystem.update(this.cameraRig);
+    this.collisionSystem.update(this.cameraRig, this.locomotion.velocityY);
     this.locomotion.postUpdate(this.collisionSystem);
     this.puzzleManager.update(dt);
 
     this.levelTransition.update(dt);
     this.hud.update(dt);
     if (this._levelLoader) this._levelLoader.update(dt);
+    if (this._steampunkGun) this._steampunkGun.update(dt);
 
     this.renderer.render(this.scene, this.camera);
   }
@@ -169,10 +186,21 @@ export class Engine {
     couchCompletePuzzle.dependencies = ['crystal_collect'];
 
     // Wire up callbacks:
-    // When lever is pulled, tell crystal puzzle where the crystal platform is
+    // When lever is pulled, tell crystal puzzle where the crystal platform is,
+    // then show cinematic camera pan to the newly spawned platforms
     leverPuzzle.onLeverPulled = () => {
       const crystalPos = enemyPatrolPuzzle.getCrystalPlatformPosition();
       crystalCollectPuzzle.setCrystalSpawnPosition(crystalPos);
+
+      // Cinematic camera pan (desktop only — VR can't override head tracking)
+      setTimeout(() => {
+        if (!this.renderer.xr.isPresenting) {
+          this._startCinematic(
+            new THREE.Vector3(12, 8, 10),
+            new THREE.Vector3(0, 6, -2),
+          );
+        }
+      }, 1000);
     };
 
     // When crystal is placed on altar, enemies become harmless
@@ -189,6 +217,62 @@ export class Engine {
     this.puzzleManager.register(couchCompletePuzzle);
 
     this.puzzleManager.init();
+
+    // Hidden steampunk gun (optional — not a puzzle)
+    this._steampunkGun = new SteampunkGun(this);
+    this._steampunkGun.setEnemyPuzzle(enemyPatrolPuzzle);
+    this._steampunkGun.init();
+
+    this.eventBus.on('gun:armed', () => {
+      this.interactionSystem.armedMode = true;
+    });
+  }
+
+  _startCinematic(vantagePos, lookAtPos) {
+    this._cinematic = {
+      elapsed: 0,
+      phase: 'pan-out',       // pan-out → hold → pan-back
+      panDuration: 1.5,
+      holdDuration: 1.5,
+      savedRigPos: this.cameraRig.position.clone(),
+      savedCamQuat: this.camera.quaternion.clone(),
+      vantagePos,
+      lookAtPos,
+    };
+  }
+
+  _updateCinematic(dt) {
+    const c = this._cinematic;
+    c.elapsed += dt;
+
+    if (c.phase === 'pan-out') {
+      const t = Math.min(c.elapsed / c.panDuration, 1);
+      const e = this._easeInOut(t);
+      this.cameraRig.position.lerpVectors(c.savedRigPos, c.vantagePos, e);
+      this.camera.lookAt(c.lookAtPos);
+      if (t >= 1) { c.phase = 'hold'; c.elapsed = 0; }
+    } else if (c.phase === 'hold') {
+      this.camera.lookAt(c.lookAtPos);
+      if (c.elapsed >= c.holdDuration) { c.phase = 'pan-back'; c.elapsed = 0; }
+    } else if (c.phase === 'pan-back') {
+      const t = Math.min(c.elapsed / c.panDuration, 1);
+      const e = this._easeInOut(t);
+      this.cameraRig.position.lerpVectors(c.vantagePos, c.savedRigPos, e);
+      // Blend camera rotation back to saved orientation
+      const lookQuat = new THREE.Quaternion();
+      this.camera.lookAt(c.lookAtPos);
+      lookQuat.copy(this.camera.quaternion);
+      this.camera.quaternion.slerpQuaternions(lookQuat, c.savedCamQuat, e);
+      if (t >= 1) {
+        this.cameraRig.position.copy(c.savedRigPos);
+        this.camera.quaternion.copy(c.savedCamQuat);
+        this._cinematic = null;
+      }
+    }
+  }
+
+  _easeInOut(t) {
+    return t < 0.5 ? 2 * t * t : 1 - (-2 * t + 2) ** 2 / 2;
   }
 
   _setupResize() {

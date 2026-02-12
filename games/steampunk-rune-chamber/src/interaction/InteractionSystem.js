@@ -26,6 +26,10 @@ export class InteractionSystem {
     eventBus.on('GRIP_RIGHT_UP', () => this._onRelease('right'));
     eventBus.on('GRIP_LEFT_UP', () => this._onRelease('left'));
 
+    // Armed mode: when true, inputs with no interactable target route to gun
+    this.armedMode = false;
+    this.gunAiming = false;
+
     // Desktop interaction: click to activate, E to grab/release
     eventBus.on('desktop:activate', () => this._onDesktopActivate());
     this._desktopGrabbed = null;
@@ -128,13 +132,19 @@ export class InteractionSystem {
 
   _onActivate(hand) {
     const hovered = this._hovered[hand];
-    if (!hovered) return;
-    if (hovered.type === 'activate' || hovered.type === 'both') {
+    // If hovering an interactable, always interact normally
+    if (hovered && (hovered.type === 'activate' || hovered.type === 'both')) {
       if (hovered.onActivate) hovered.onActivate(hand);
+      return;
+    }
+    // Armed + right hand + aiming → fire gun
+    if (this.armedMode && hand === 'right' && this.gunAiming) {
+      this.eventBus.emit('gun:fire');
     }
   }
 
   _onGrab(hand) {
+    if (this.armedMode && hand === 'right') return;
     const hovered = this._hovered[hand];
     if (!hovered) return;
     if (hovered.type !== 'grab' && hovered.type !== 'both') return;
@@ -175,6 +185,7 @@ export class InteractionSystem {
   }
 
   _onRelease(hand) {
+    if (this.armedMode && hand === 'right') return;
     const grabbed = this._grabbed[hand];
     if (!grabbed) return;
 
@@ -233,9 +244,14 @@ export class InteractionSystem {
 
   _onDesktopActivate() {
     const target = this._getDesktopTarget();
-    if (!target) return;
-    if (target.type === 'activate' || target.type === 'both') {
+    // If hovering an interactable, always interact normally
+    if (target && (target.type === 'activate' || target.type === 'both')) {
       if (target.onActivate) target.onActivate('desktop');
+      return;
+    }
+    // No interactable target + armed → fire gun
+    if (this.armedMode) {
+      this.eventBus.emit('gun:fire');
     }
   }
 
